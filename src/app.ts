@@ -13,6 +13,7 @@ import type { AppMode, TrustProxy } from './shared/config.js';
 import type { Db } from './shared/db.js';
 import { AppError, handleFrameworkError, registerErrorHandling } from './shared/errors.js';
 import { registerOwnerCookie } from './shared/owner.js';
+import { DEFAULT_WEB_ROOT, registerWebApp } from './shared/web.js';
 
 export interface BuildAppOptions {
   mode: AppMode;
@@ -28,6 +29,8 @@ export interface BuildAppOptions {
   /** Test seams: replace the click buffer or the link cache. */
   clicks?: ClickSink & { close(): Promise<void> };
   cache?: LinkCache;
+  /** Directory of the Vite build (`web/dist`); `false` skips the UI routes. */
+  webRoot?: string | false;
 }
 
 /** SPEC §7: every /api route shares this per-IP budget unless it sets its own. */
@@ -50,7 +53,15 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
   });
 
   registerErrorHandling(app);
-  void app.register(helmet);
+  void app.register(helmet, {
+    contentSecurityPolicy: {
+      directives: {
+        // On plain http (docker compose at http://localhost) this would rewrite same-origin
+        // asset URLs to https and break the UI; keep it only for https deployments.
+        upgradeInsecureRequests: options.baseUrl.startsWith('https:') ? [] : null,
+      },
+    },
+  });
 
   // Polled by Docker/host health checks every few seconds: keep it out of the info logs.
   app.get('/health', { logLevel: 'warn' }, () => ({ ok: true, mode: options.mode }));
@@ -88,6 +99,10 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
       },
       { prefix: '/api' },
     );
+    const webRoot = options.webRoot ?? DEFAULT_WEB_ROOT;
+    if (webRoot !== false) {
+      void app.register(async (web) => registerWebApp(web, webRoot));
+    }
   }
 
   if (servesRedirect(options.mode)) {
