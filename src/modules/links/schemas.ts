@@ -61,10 +61,3 @@ export const listLinksQuery = z.object({
     .default(LIST_DEFAULT_LIMIT),
   cursor: z.string({ error: CURSOR_INVALID }).min(1, { error: CURSOR_INVALID }).optional(),
 });
-
-/** `:id` path parameter; anything that is not a positive integer can never match a link. */
-export function parseLinkId(raw: string): number | null {
-  if (!/^[1-9]\d{0,15}$/.test(raw)) return null;
-  const id = Number(raw);
-  return Number.isSafeInteger(id) ? id : null;
-}

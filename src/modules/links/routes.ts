@@ -1,10 +1,11 @@
 import type { FastifyPluginCallback } from 'fastify';
 import type { Db } from '../../shared/db.js';
 import { AppError } from '../../shared/errors.js';
+import { linkNotFound, parseLinkId } from '../../shared/ownedLink.js';
 import { parseInput } from '../../shared/validation.js';
 import { createLinkRepository } from './repository.js';
-import { createLinkBody, listLinksQuery, parseLinkId, updateLinkBody } from './schemas.js';
-import { createLinkService, linkNotFound } from './service.js';
+import { createLinkBody, listLinksQuery, updateLinkBody } from './schemas.js';
+import { createLinkService } from './service.js';
 
 export interface LinksRoutesOptions {
   db: Db;

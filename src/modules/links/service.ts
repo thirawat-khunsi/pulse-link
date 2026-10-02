@@ -1,6 +1,7 @@
 import { ALIAS_REJECTION_MESSAGES, isReservedCode, validateAlias } from '../../shared/alias.js';
 import { encodeId } from '../../shared/code.js';
 import { AppError } from '../../shared/errors.js';
+import { linkNotFound } from '../../shared/ownedLink.js';
 import { URL_REJECTION_MESSAGES, validateTargetUrl } from '../../shared/url.js';
 import type { LinkPatch, LinkRepository, LinkRow, ListCursor } from './repository.js';
 import type { CreateLinkInput, UpdateLinkInput } from './schemas.js';
@@ -36,8 +37,6 @@ export interface LinkServiceOptions {
    */
   onLinkChanged?: (code: string) => void;
 }
-
-export const linkNotFound = () => new AppError(404, 'LINK_NOT_FOUND', 'ไม่พบลิงก์นี้');
 
 function isCodeConflict(err: unknown): boolean {
   const e = err as { code?: string; constraint?: string };
