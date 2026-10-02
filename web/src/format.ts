@@ -85,14 +85,27 @@ export function truncateMiddle(value: string, max = 60): string {
   return `${value.slice(0, head)}…${value.slice(value.length - tail)}`;
 }
 
-/** Short URL without the scheme, for display ("pulse.example/กาแฟ"). */
-export function displayShortUrl(shortUrl: string): string {
+/** Percent-decode for display only; malformed sequences are shown as they are. */
+export function safeDecode(value: string): string {
   try {
-    const url = new URL(shortUrl);
-    return `${url.host}${decodeURIComponent(url.pathname)}`;
+    return decodeURIComponent(value);
   } catch {
-    return shortUrl;
+    return value;
   }
+}
+
+/**
+ * Short URL without the scheme and with Thai aliases decoded, for display only
+ * ("pulse.example/กาแฟ"). Copy, open and QR keep the encoded `shortUrl` from the API.
+ */
+export function displayShortUrl(shortUrl: string): string {
+  let url: URL;
+  try {
+    url = new URL(shortUrl);
+  } catch {
+    return safeDecode(shortUrl);
+  }
+  return `${url.host}${safeDecode(url.pathname)}`;
 }
 
 export const STATUS_LABELS: Record<LinkStatus, string> = {

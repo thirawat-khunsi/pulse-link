@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useRef } from 'react';
 import { type Link, type LinkStatus, qrImageUrl } from '../api';
-import { STATUS_LABELS } from '../format';
+import { displayShortUrl, STATUS_LABELS } from '../format';
 import { useCopy } from '../hooks';
 
 const PULSE_PATH = 'M2 22h22l6-14 8 26 7-18 5 6h68';
@@ -110,7 +110,7 @@ export function QrImage({ link, size = 360 }: { link: Link; size?: number }) {
       src={qrImageUrl(link, { format: 'svg' })}
       width={size}
       height={size}
-      alt={`QR Code ของ ${link.shortUrl}`}
+      alt={`QR Code ของ ${displayShortUrl(link.shortUrl)}`}
     />
   );
 }
@@ -158,6 +158,7 @@ export function QrDialog({ link, onClose }: { link: Link | null; onClose: () => 
       {link ? (
         <>
           <h2 id="qr-title">QR Code</h2>
+          <p className="qr-url">{displayShortUrl(link.shortUrl)}</p>
           <QrImage link={link} />
           <p>สแกนแล้วจะถูกนับเป็น “สแกน QR” แยกจากคลิก</p>
           <div className="btn-row">

@@ -9,6 +9,7 @@ import {
   normalizeUrlInput,
   percent,
   referrerLabel,
+  safeDecode,
   STATUS_LABELS,
   truncateMiddle,
 } from './format';
@@ -96,10 +97,43 @@ describe('formatting', () => {
     expect(out.endsWith('/end')).toBe(true);
     expect(truncateMiddle('short', 40)).toBe('short');
   });
+});
 
-  it('shows Thai aliases decoded and without the scheme', () => {
+describe('displayShortUrl (display only; copy/open/QR keep the encoded URL)', () => {
+  const COFFEE = '\u0E01\u0E32\u0E41\u0E1F';
+
+  it('decodes a Thai alias and drops the scheme', () => {
     expect(displayShortUrl('https://pl.test/%E0%B8%81%E0%B8%B2%E0%B9%81%E0%B8%9F')).toBe(
-      'pl.test/กาแฟ',
+      `pl.test/${COFFEE}`,
     );
+  });
+
+  it('keeps the port and mixed Thai/Latin aliases', () => {
+    expect(displayShortUrl('http://localhost:3000/%E0%B8%81%E0%B8%B2%E0%B9%81%E0%B8%9F-2026')).toBe(
+      `localhost:3000/${COFFEE}-2026`,
+    );
+  });
+
+  it('leaves Latin codes as they are', () => {
+    expect(displayShortUrl('https://pl.test/aw4bh0')).toBe('pl.test/aw4bh0');
+    expect(displayShortUrl('https://pl.test/my_link-1')).toBe('pl.test/my_link-1');
+  });
+
+  it('shows broken percent-encoding raw instead of throwing', () => {
+    expect(displayShortUrl('https://pl.test/%E0%B8')).toBe('pl.test/%E0%B8');
+    expect(displayShortUrl('https://pl.test/100%25-%zz')).toBe('pl.test/100%25-%zz');
+  });
+
+  it('decodes even when the value is not a full URL', () => {
+    expect(displayShortUrl('%E0%B8%81%E0%B8%B2%E0%B9%81%E0%B8%9F')).toBe(COFFEE);
+    expect(displayShortUrl('%zz')).toBe('%zz');
+  });
+});
+
+describe('safeDecode', () => {
+  it('decodes valid sequences and returns malformed input unchanged', () => {
+    expect(safeDecode('%E0%B8%81')).toBe('\u0E01');
+    expect(safeDecode('%E0%B8')).toBe('%E0%B8');
+    expect(safeDecode('plain')).toBe('plain');
   });
 });
