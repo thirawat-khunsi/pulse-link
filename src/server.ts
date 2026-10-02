@@ -14,6 +14,9 @@ export async function startServer(modeOverride?: AppMode): Promise<void> {
   const db = createPool(config.DATABASE_URL);
   const app = buildApp({
     mode,
+    db,
+    baseUrl: config.BASE_URL,
+    secureCookies: config.NODE_ENV === 'production',
     trustProxy: config.TRUST_PROXY,
     logger: { level: config.NODE_ENV === 'production' ? 'info' : 'debug' },
   });

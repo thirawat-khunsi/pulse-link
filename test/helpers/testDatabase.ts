@@ -48,3 +48,13 @@ function parseTarget(raw: string): Target | null {
 function sameTarget(a: Target, b: Target): boolean {
   return a.host === b.host && a.port === b.port && a.database === b.database;
 }
+
+/**
+ * `TEST_DATABASE_URL` after the safety check, or undefined when unset (DB tests are skipped).
+ * Call at the top level of every integration test file so a bad URL fails before any query runs.
+ */
+export function getTestDatabaseUrl(): string | undefined {
+  const url = process.env.TEST_DATABASE_URL;
+  if (url) assertSafeTestDatabaseUrl(url, process.env.DATABASE_URL);
+  return url;
+}

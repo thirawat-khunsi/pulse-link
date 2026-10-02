@@ -1,11 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createPool, type Db } from '../../src/shared/db.js';
 import { runMigrations } from '../../src/shared/migrate.js';
-import { assertSafeTestDatabaseUrl } from '../helpers/testDatabase.js';
+import { getTestDatabaseUrl } from '../helpers/testDatabase.js';
 
-const url = process.env.TEST_DATABASE_URL;
 // Fails the file at import time, before any connection or DROP runs.
-if (url) assertSafeTestDatabaseUrl(url, process.env.DATABASE_URL);
+const url = getTestDatabaseUrl();
 
 describe.skipIf(!url)('runMigrations (requires TEST_DATABASE_URL)', () => {
   let db: Db;
