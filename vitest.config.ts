@@ -9,7 +9,7 @@ try {
 
 export default defineConfig({
   test: {
-    include: ['test/**/*.test.ts'],
+    include: ['test/**/*.test.ts', 'web/src/**/*.test.ts'],
     environment: 'node',
     // Integration tests share one test database; run files sequentially.
     fileParallelism: false,

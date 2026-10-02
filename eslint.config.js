@@ -1,9 +1,10 @@
 import js from '@eslint/js';
 import prettier from 'eslint-config-prettier';
+import reactHooks from 'eslint-plugin-react-hooks';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['dist/', 'coverage/', 'node_modules/', 'web/'] },
+  { ignores: ['dist/', 'coverage/', 'node_modules/', 'web/dist/'] },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   {
@@ -24,6 +25,10 @@ export default tseslint.config(
     // Vitest asymmetric matchers (expect.any, expect.stringMatching) are typed `any`.
     files: ['test/**/*.ts'],
     rules: { '@typescript-eslint/no-unsafe-assignment': 'off' },
+  },
+  {
+    files: ['web/src/**/*.{ts,tsx}'],
+    ...reactHooks.configs.flat['recommended-latest'],
   },
   {
     files: ['**/*.js'],
