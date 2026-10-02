@@ -1,0 +1,20 @@
+# Keep the build context small and free of secrets.
+.git
+.gitignore
+.gitattributes
+.claude
+.vscode
+.idea
+node_modules
+dist
+coverage
+web/node_modules
+web/dist
+test
+docs
+*.md
+.env
+.env.*
+*.log
+Dockerfile
+docker-compose.yml

@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyServerOptions } from 'fastify';
 import { buildApp } from './app.js';
-import { type AppMode, loadConfig, loadDotEnv } from './shared/config.js';
+import { type AppMode, loadConfig, loadDotEnv, useSecureCookies } from './shared/config.js';
 import { createPool } from './shared/db.js';
 
 export interface StartServerOptions {
@@ -36,7 +36,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     mode,
     db,
     baseUrl: config.BASE_URL,
-    secureCookies: config.NODE_ENV === 'production',
+    secureCookies: useSecureCookies(config),
     clickFlushMs: config.CLICK_FLUSH_MS,
     trustProxy: config.TRUST_PROXY,
     logger: options.logger ?? { level: config.NODE_ENV === 'production' ? 'info' : 'debug' },

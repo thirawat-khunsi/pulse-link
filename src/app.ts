@@ -50,7 +50,8 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
   registerErrorHandling(app);
   void app.register(helmet);
 
-  app.get('/health', () => ({ ok: true, mode: options.mode }));
+  // Polled by Docker/host health checks every few seconds: keep it out of the info logs.
+  app.get('/health', { logLevel: 'warn' }, () => ({ ok: true, mode: options.mode }));
 
   // One cache per process, shared by the redirect (reads) and the links API (invalidates).
   // In APP_MODE=api there is no redirect here, so invalidation is a no-op (D-004).

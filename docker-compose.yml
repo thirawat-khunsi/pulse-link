@@ -1,4 +1,24 @@
 services:
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://pulse:pulse@postgres:5432/pulse_link
+      BASE_URL: http://localhost:3000
+      PORT: 3000
+      APP_MODE: all
+      TRUST_PROXY: 'false'
+      CLICK_FLUSH_MS: 1000
+      NODE_ENV: production
+    ports:
+      - '3000:3000'
+    # Migrations run in the image's CMD before the server starts; on SIGTERM the server drains
+    # the click buffer (gives up after 5 s), well inside this grace period.
+    stop_grace_period: 15s
+
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped

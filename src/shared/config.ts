@@ -69,6 +69,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return result.data;
 }
 
+/**
+ * SPEC §4: pl_owner is Secure in production. Also requires an https BASE_URL, because browsers
+ * may drop a Secure cookie on plain http (e.g. `docker compose up` at http://localhost; D-022).
+ */
+export function useSecureCookies(config: Pick<Config, 'NODE_ENV' | 'BASE_URL'>): boolean {
+  return config.NODE_ENV === 'production' && config.BASE_URL.startsWith('https://');
+}
+
 /** Load `.env` from the working directory if present (local development convenience). */
 export function loadDotEnv(path = '.env'): void {
   try {

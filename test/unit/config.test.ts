@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ConfigError, loadConfig } from '../../src/shared/config.js';
+import { ConfigError, loadConfig, useSecureCookies } from '../../src/shared/config.js';
 
 const base = {
   DATABASE_URL: 'postgres://u:p@localhost:5432/db',
@@ -60,5 +60,25 @@ describe('loadConfig', () => {
   ])('rejects invalid env %o', (override, key) => {
     expect(() => loadConfig({ ...base, ...override })).toThrow(ConfigError);
     expect(() => loadConfig({ ...base, ...override })).toThrow(key);
+  });
+});
+
+describe('useSecureCookies', () => {
+  it.each([
+    ['production', 'https://pulse.example.com', true],
+    ['production', 'http://localhost:3000', false],
+    ['development', 'https://pulse.example.com', false],
+    ['test', 'http://localhost:3000', false],
+  ] as const)('NODE_ENV=%s BASE_URL=%s → %s', (NODE_ENV, BASE_URL, expected) => {
+    expect(useSecureCookies({ NODE_ENV, BASE_URL })).toBe(expected);
+  });
+});
+
+describe('TRUST_PROXY', () => {
+  it('accepts proxy-addr names for private proxy hops', () => {
+    expect(loadConfig({ ...base, TRUST_PROXY: 'loopback, uniquelocal' }).TRUST_PROXY).toEqual([
+      'loopback',
+      'uniquelocal',
+    ]);
   });
 });
