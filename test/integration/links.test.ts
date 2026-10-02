@@ -199,24 +199,26 @@ describe.skipIf(!url)('/api/links (requires TEST_DATABASE_URL)', () => {
       expect(body.nextCursor).toEqual(expect.any(String));
     });
 
-    it('reports clicks and QR scans separately, excluding bots', async () => {
-      const link = await create(ALICE, { url: 'https://example.com' });
-      // 3 plain clicks + 2 QR scans by people, plus bot traffic of both kinds.
-      await db.query(
-        `INSERT INTO clicks (link_id, source, is_bot) VALUES
-           ($1,'click',false),($1,'click',false),($1,'click',false),
-           ($1,'qr',false),($1,'qr',false),($1,'qr',true),($1,'click',true)`,
-        [link.id],
-      );
-      await db.query('UPDATE links SET click_count = 5 WHERE id = $1', [link.id]);
+    it.each(['click', 'qr'] as const)(
+      'counts non-bot clicks rows: 2 clicks + 1 scan + 1 bot (%s) → 2 / 1',
+      async (botSource) => {
+        const link = await create(ALICE, { url: 'https://example.com' });
+        await db.query(
+          `INSERT INTO clicks (link_id, source, is_bot) VALUES
+             ($1, 'click', false), ($1, 'click', false), ($1, 'qr', false), ($1, $2, true)`,
+          [link.id, botSource],
+        );
+        // links.click_count only enforces max_clicks; a stale value must not leak into the API.
+        await db.query('UPDATE links SET click_count = 99 WHERE id = $1', [link.id]);
 
-      const [item] = (await api(ALICE, 'GET', '')).json<{ items: LinkDto[] }>().items;
-      expect(item).toMatchObject({ clickCount: 3, qrScanCount: 2 });
-      expect((await api(ALICE, 'GET', `/${link.id}`)).json()).toMatchObject({
-        clickCount: 3,
-        qrScanCount: 2,
-      });
-    });
+        const expected = { clickCount: 2, qrScanCount: 1 };
+        const [item] = (await api(ALICE, 'GET', '')).json<{ items: LinkDto[] }>().items;
+        expect(item).toMatchObject(expected);
+        expect((await api(ALICE, 'GET', `/${link.id}`)).json()).toMatchObject(expected);
+        const patched = await api(ALICE, 'PATCH', `/${link.id}`, { isActive: true });
+        expect(patched.json()).toMatchObject(expected);
+      },
+    );
 
     it('derives status: disabled > expired > exhausted > active', async () => {
       const ids: number[] = [];

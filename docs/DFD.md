@@ -49,7 +49,7 @@ flowchart LR
     P1 -- "Short URL, รายการลิงก์ + clickCount, qrScanCount" --> Creator
     P1 -- "INSERT / UPDATE / DELETE" --> D1
     D1 -- "ลิงก์ของ owner" --> P1
-    D2 -- "จำนวนสแกน QR" --> P1
+    D2 -- "จำนวนคลิก / สแกน QR (ไม่รวมบอท)" --> P1
     P1 -- "invalidate เมื่อแก้/ลบ" --> D3
 
     %% 2.0 Redirect

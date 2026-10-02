@@ -20,8 +20,9 @@ export interface LinkDto {
   maxClicks: number | null;
   isActive: boolean;
   createdAt: string;
-  /** Non-bot visits through the plain link (QR scans excluded, see DECISIONS D-018). */
+  /** Non-bot rows in `clicks` with source=click (QR scans excluded, see DECISIONS D-018). */
   clickCount: number;
+  /** Non-bot rows in `clicks` with source=qr. */
   qrScanCount: number;
   status: LinkStatus;
 }
@@ -78,7 +79,6 @@ export function createLinkService(repo: LinkRepository, options: LinkServiceOpti
 
   function toDto(row: LinkRow, now = new Date()): LinkDto {
     const id = Number(row.id);
-    const qrScanCount = Number(row.qr_scan_count);
     return {
       id,
       code: row.code,
@@ -90,9 +90,8 @@ export function createLinkService(repo: LinkRepository, options: LinkServiceOpti
       maxClicks: row.max_clicks,
       isActive: row.is_active,
       createdAt: row.created_at.toISOString(),
-      // click_count includes QR scans (both consume max_clicks); report them separately.
-      clickCount: Math.max(row.click_count - qrScanCount, 0),
-      qrScanCount,
+      clickCount: Number(row.click_total),
+      qrScanCount: Number(row.qr_scan_count),
       status: linkStatus(row, now),
     };
   }

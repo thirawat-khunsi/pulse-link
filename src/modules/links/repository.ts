@@ -1,6 +1,6 @@
 import type { Db } from '../../shared/db.js';
 
-/** A `links` row plus the derived QR scan count. */
+/** A `links` row plus visit counts derived from `clicks`. */
 export interface LinkRow {
   id: string; // BIGINT arrives as a string from pg
   owner_token: string;
@@ -14,7 +14,9 @@ export interface LinkRow {
   created_at: Date;
   /** `created_at::text` keeps microseconds, which a JS Date would lose (used for cursors). */
   created_at_text: string;
-  qr_scan_count: string; // COUNT(*) is BIGINT
+  // COUNT(*) is BIGINT, so both arrive as strings.
+  click_total: string;
+  qr_scan_count: string;
 }
 
 export interface NewLink {
@@ -39,10 +41,13 @@ export interface ListCursor {
   id: number;
 }
 
-// Non-bot QR scans; served by idx_clicks_link_time (link_id prefix).
-const QR_SCANS = `(SELECT COUNT(*) FROM clicks c
-                    WHERE c.link_id = l.id AND c.source = 'qr' AND NOT c.is_bot) AS qr_scan_count`;
-const COLUMNS = `l.*, l.created_at::text AS created_at_text, ${QR_SCANS}`;
+// Displayed counts come from `clicks` (non-bot only), never from links.click_count, which exists
+// to enforce max_clicks (DECISIONS D-018). Served by idx_clicks_link_time (link_id prefix).
+const visits = (source: 'click' | 'qr', alias: string) =>
+  `(SELECT COUNT(*) FROM clicks c
+     WHERE c.link_id = l.id AND c.source = '${source}' AND NOT c.is_bot) AS ${alias}`;
+const COLUMNS = `l.*, l.created_at::text AS created_at_text,
+  ${visits('click', 'click_total')}, ${visits('qr', 'qr_scan_count')}`;
 
 const PATCH_COLUMNS = {
   isActive: 'is_active',
@@ -65,7 +70,7 @@ export function createLinkRepository(db: Db) {
            VALUES (COALESCE($1, nextval('links_id_seq')), $2, $3, $4, $5, $6, $7)
            RETURNING *
          )
-         SELECT l.*, l.created_at::text AS created_at_text, '0' AS qr_scan_count FROM l`,
+         SELECT l.*, l.created_at::text AS created_at_text, '0' AS click_total, '0' AS qr_scan_count FROM l`,
         [
           link.id ?? null,
           link.ownerToken,
