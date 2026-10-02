@@ -324,9 +324,9 @@ describe.skipIf(!url)('GET /:code (requires TEST_DATABASE_URL)', () => {
     });
 
     it('normalises mark order (NFC) and Latin case', async () => {
-      await insertLink({ code: 'กุ่ม', target: 'https://group.example/' });
+      await insertLink({ code: '\u0E01\u0E38\u0E48\u0E21', target: 'https://group.example/' });
       await insertLink({ code: 'coffee-01', target: 'https://latin.example/' });
-      const reordered = `/${encodeURIComponent('กุ่ม')}`;
+      const reordered = `/${encodeURIComponent('\u0E01\u0E48\u0E38\u0E21')}`;
       expect((await visit(reordered)).headers.location).toBe('https://group.example/');
       expect((await visit('/COFFEE-01')).headers.location).toBe('https://latin.example/');
     });
