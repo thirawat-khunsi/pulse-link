@@ -55,13 +55,14 @@ src/
   entry/{all,api,redirect}.ts   จุดเริ่มที่บังคับโหมด
   scripts/migrate.ts     runner ของ db/migrations
   shared/                config (zod), db (pg Pool), errors + error handler, validation (zod → 400), migrate, code generator (Sqids),
-                         url validator, alias normalizer, owner cookie, html escape/หน้า 404, lru, bot detection
+                         url validator, alias normalizer, owner cookie, html escape/หน้า 404, lru, bot detection,
+                         ownedLink (parseLinkId + ตรวจ owner ให้ qr/stats โดยไม่ import links)
   modules/
     links/               CRUD
     redirect/            LinkCache (2 LRU), resolver (cache → DB, atomic max_clicks), หน้า 410
     clicks/              ua-parser (device/browser/os), ClickBuffer + flush SQL
-    qr/                  PNG/SVG
-    stats/               query สถิติ (Asia/Bangkok)
+    qr/                  PNG/SVG (M, margin 2, size 128-2048, download แบบ RFC 5987)
+    stats/               totals (ตลอดอายุ), byDay/device/browser/referrer (7|30 วัน, Asia/Bangkok), recent 20
 db/migrations/           SQL ธรรมดา + runner
 web/                     React + Vite (build แล้ว Fastify เสิร์ฟ)
 ```

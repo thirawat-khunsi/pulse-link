@@ -150,3 +150,35 @@ integration test ทุกไฟล์ที่เพิ่มต่อจาก
   `X-Forwarded-For` หลบ rate limit ได้ (ทดสอบแล้ว) — รายละเอียดใน DEPLOY.md §4
 - Neon ใช้ Direct connection (ไม่ใช่ `-pooler`) เพราะ migration ใช้ session advisory lock ซึ่งใช้กับ PgBouncer
   แบบ transaction pooling ไม่ได้ และใช้ `sslmode=verify-full`
+
+## D-023 QR code (P5)
+- เข้ารหัส `${BASE_URL}/${encodeURIComponent(code)}?s=qr` ด้วย error correction M, margin 2 ตาม SPEC; alias ไทยจึงอยู่ใน QR
+  แบบ percent-encoded ซึ่งแอปกล้องทุกตัวเปิดได้ (ทดสอบโดยถอดรหัส PNG แล้วยิงเข้า redirect จริง ได้ 302 และ source=qr)
+- `format` = `png` (ค่าเริ่มต้น) | `svg`; `size` เป็นจำนวนเต็ม 128-2048 พิกเซล (ค่าเริ่มต้น 512) นอกช่วง → 400;
+  `download` ต้องเป็น `1` เท่านั้นจึงส่งเป็นไฟล์ ค่าอื่นแสดงในหน้า
+- ชื่อไฟล์: `Content-Disposition: attachment; filename="pulse-link-<id>.<ext>"; filename*=UTF-8''pulse-link-<code>.<ext>`
+  (RFC 5987) เบราว์เซอร์ใหม่ได้ชื่อ alias ไทย เบราว์เซอร์เก่าได้ชื่อ ASCII
+- `Cache-Control: private, max-age=86400`: ภาพเปลี่ยนเฉพาะเมื่อ `BASE_URL` เปลี่ยน และต้องใช้ cookie ของเจ้าของจึงเป็น private
+- SVG ตอบพร้อม `Content-Security-Policy: default-src 'none'` (SVG ของ `qrcode` ไม่มี script อยู่แล้ว กันไว้อีกชั้น)
+- ลิงก์ที่ปิด/หมดอายุยังขอ QR ได้ เพราะเจ้าของอาจเปิดใช้ใหม่ (สแกนแล้วได้หน้า 410 ตามสถานะ)
+- ตรวจ query ก่อนตรวจความเป็นเจ้าของ: query ผิดได้ 400 แม้ลิงก์ไม่ใช่ของตัวเอง (ไม่เผยว่าลิงก์มีอยู่หรือไม่)
+- devDependencies สำหรับ test เท่านั้น (ผู้ใช้อนุมัติ): `jsqr` 1.4.0 (Apache-2.0) ถอดรหัส QR และ `pngjs` ^5.0.0 (MIT)
+  อ่าน PNG — ใช้ช่วงเดียวกับที่ `qrcode` ใช้ lockfile จึงมี pngjs ชุดเดียว (5.0.0, deduped); type ของ pngjs เป็น `.d.ts` ใน `test/types`
+  `npm audit` (2026-10-03): 0 vulnerabilities ทั้งแบบรวม dev และ `--omit=dev`
+- `parseLinkId`, `linkNotFound`, `requireOwnedLink` ย้ายไป `src/shared/ownedLink.ts` เพื่อให้ qr/stats ตรวจเจ้าของได้
+  โดยไม่ import โมดูล links (ตาม D-010)
+
+## D-024 สถิติ (P5, ผู้ใช้ยืนยัน totals และ recent)
+- `totals` นับ**ตลอดอายุลิงก์** (ผู้ใช้เลือก): `clicks`/`qrScans` ใช้นิยามเดียวกับ `clickCount`/`qrScanCount` (D-018)
+  การ์ดใน dashboard จึงตรงกับหน้าประวัติเสมอ; `bots` = แถวที่ `is_bot` ทั้งหมด
+- `byDay`, `byDevice`, `byBrowser`, `byReferrer` นับเฉพาะช่วง `days` (7 หรือ 30, ค่าเริ่มต้น 7, ค่าอื่น → 400) และไม่รวมบอท
+- ช่วงวัน = วันตามปฏิทิน Asia/Bangkok: "วันนี้" ถึงย้อนหลัง `days - 1` วัน (รวมวันนี้) `byDay` มีครบทุกวันเรียงเก่าไปใหม่
+  วันที่ไม่มีคลิกเป็น 0; ขอบเขตเขียนเป็น timestamptz (`clicked_at >= เที่ยงคืนกรุงเทพของวันแรก`) เพื่อใช้ index
+- "ตอนนี้" ส่งจาก JS เป็นพารามิเตอร์ ไม่ใช้ `now()` ใน SQL เพื่อให้ test ตรึงเวลาและทดสอบรอยต่อวัน 16:59:59Z / 17:00:00Z ได้
+- `recent` = 20 รายการล่าสุดที่ไม่ใช่บอท (ผู้ใช้เลือก) **ไม่จำกัดตามช่วงวัน** เพื่อให้ตารางไม่ว่างเมื่อลิงก์เงียบไปนาน
+- `byReferrer` top 10 นับ `null` (ไม่มี Referer: เปิดตรง, แอปแชต, แอปสแกน QR) เป็นหนึ่งรายการ ให้ UI แสดงว่า "เปิดตรง";
+  `browser: null` ให้ UI แสดงว่า "ไม่ทราบ"; เมื่อจำนวนเท่ากันเรียงชื่อก่อน `null`
+- ผลลัพธ์มี `days` และ `timeZone: "Asia/Bangkok"` เพิ่มจาก SPEC เพื่อให้ UI แสดงช่วงได้ถูก; ตอบ `Cache-Control: no-store`
+- สถิติเห็นเฉพาะคลิกที่ flush แล้ว (ช้ากว่าความจริงไม่เกิน `CLICK_FLUSH_MS` ≈ 1 วินาที) dashboard รีเฟรชทุก 5 วินาทีอยู่แล้ว
+- test ความสอดคล้อง: ยิงคลิกจริงผ่าน redirect (คน, preview ของ LINE, Googlebot, HEAD, สแกน) ทั้งลิงก์ปกติและลิงก์ที่มี
+  `max_clicks` แล้วรายการ, รายละเอียด และ stats ต้องได้ตัวเลขเดียวกัน (4 คลิก / 2 สแกน / 2 บอท) ขณะที่ `links.click_count` = 6

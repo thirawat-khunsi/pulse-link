@@ -149,7 +149,17 @@ JAR=$(mktemp)          # เก็บ cookie pl_owner เหมือนเบ�
    ```bash
    sleep 2; curl -s -b $JAR "$APP/api/links?limit=5" | grep -o '"code":"[^"]*"\|"clickCount":[0-9]*\|"qrScanCount":[0-9]*'
    # deploy-test: clickCount 1 (curl -I เป็น HEAD จึงไม่นับ), qrScanCount 1
+   curl -s -b $JAR "$APP/api/links/$ID/stats?days=7" | grep -o '"totals":{[^}]*}'
+   # "totals":{"clicks":1,"qrScans":1,"bots":0}   ← ต้องตรงกับ clickCount / qrScanCount ข้างบน (D-018)
    ```
+   **QR**: ดาวน์โหลดแล้วสแกนด้วยกล้องมือถือ ต้องเปิดปลายทางได้และ `qrScanCount` เพิ่ม 1
+   ```bash
+   curl -s -b $JAR -o qr.png -D - "$APP/api/links/$ID/qr?download=1" | grep -i -E 'content-type|content-disposition'
+   # content-type: image/png
+   # content-disposition: attachment; filename="pulse-link-<id>.png"; filename*=UTF-8''pulse-link-deploy-test.png
+   curl -s -b $JAR -o /dev/null -w '%{http_code} %{content_type}\n' "$APP/api/links/$ID/qr?format=svg"   # 200 image/svg+xml
+   ```
+   QR เข้ารหัส `https://<app>/deploy-test?s=qr` จึงต้องตั้ง `BASE_URL` ให้ถูกก่อนพิมพ์/แจก QR
 6. **404 / 410**
    ```bash
    curl -s -o /dev/null -w '%{http_code}\n' $APP/does-not-exist                         # 404 (หน้า HTML ไทย)

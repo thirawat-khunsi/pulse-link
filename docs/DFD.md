@@ -75,7 +75,7 @@ flowchart LR
     %% 5.0 Stats
     Creator -- "ขอสถิติ (days=7 หรือ 30)" --> P5
     D1 -- "ตรวจ owner" --> P5
-    D2 -- "คลิกในช่วงวัน" --> P5
+    D2 -- "คลิกที่ไม่ใช่บอท (totals ตลอดอายุ, กราฟตามช่วงวัน)" --> P5
     P5 -- "totals, byDay, byDevice, byBrowser, byReferrer, recent" --> Creator
 ```
 
@@ -87,7 +87,7 @@ flowchart LR
 | 2.0 | Redirect | `GET /:code`, `HEAD /:code` | decode + NFC → cache → DB; ไม่พบ 404, ปิด/หมดอายุ/ครบจำนวน 410, พบ 302 + `Cache-Control: no-store` |
 | 3.0 | บันทึกคลิก | (ภายใน) | แยก UA ด้วย ua-parser-js, ตรวจบอท, เก็บเฉพาะ hostname ของ Referer, flush แบบ batch ไม่หน่วง redirect |
 | 4.0 | สร้าง QR | `GET /api/links/:id/qr` | เข้ารหัส `${BASE_URL}/${encodeURIComponent(code)}?s=qr`, error correction M, margin 2 |
-| 5.0 | คำนวณสถิติ | `GET /api/links/:id/stats` | จัดกลุ่มวันตาม Asia/Bangkok, เติมวันว่างเป็น 0, ไม่รวมบอท (แยกใน totals.bots) |
+| 5.0 | คำนวณสถิติ | `GET /api/links/:id/stats` | totals ตลอดอายุ (ตรงกับ clickCount/qrScanCount); byDay ทุกวันของช่วง 7/30 วันตาม Asia/Bangkok (วันว่าง = 0); device/browser/referrer ในช่วง; recent 20; ไม่รวมบอท (แยกใน totals.bots) |
 
 ### Data Store
 
