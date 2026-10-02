@@ -69,3 +69,13 @@ SPEC กำหนด Node 20+ จึงใช้ Vitest 4 (Vitest 5 ต้อง
 ## D-015 Entrypoint
 `src/main.ts` (ใช้กับ `npm start`/`npm run dev`) อ่าน `APP_MODE`; `src/entry/{all,api,redirect}.ts` บังคับโหมดตามชื่อไฟล์
 สำหรับรันแต่ละ service แยกกัน (`node dist/entry/redirect.js`)
+
+## D-016 ป้องกัน integration test ล้างฐานข้อมูลจริง
+`test/helpers/testDatabase.ts` ตรวจ `TEST_DATABASE_URL` ตอน import ไฟล์ทดสอบ (ก่อนเปิด connection หรือ DROP ใดๆ)
+และให้ไฟล์ล้มเหลวทันทีเมื่อ: URL ไม่ใช่ postgres, ชื่อฐานข้อมูลไม่ลงท้ายด้วย `_test`, หรือชี้ไปฐานเดียวกับ `DATABASE_URL`
+(เทียบทั้งสตริงตรงตัว และ host + port + ชื่อฐานข้อมูล เพื่อจับกรณีเขียน URL ต่างกันแต่เป็นฐานเดียวกัน)
+integration test ทุกไฟล์ที่เพิ่มต่อจากนี้ต้องเรียก `assertSafeTestDatabaseUrl` แบบเดียวกัน
+
+`pulse_link_test` ถูกสร้างโดย `db/init/01-test-db.sql` ซึ่ง Postgres รันเฉพาะตอน volume ยังว่าง
+ถ้ามี volume `pgdata` เก่าอยู่ก่อนแล้วให้ `docker compose down -v` หรือสร้างเองด้วย
+`docker compose exec postgres createdb -U pulse pulse_link_test`
