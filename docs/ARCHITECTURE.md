@@ -54,7 +54,7 @@ src/
   server.ts, main.ts     เริ่ม server ตาม APP_MODE + graceful shutdown
   entry/{all,api,redirect}.ts   จุดเริ่มที่บังคับโหมด
   scripts/migrate.ts     runner ของ db/migrations
-  shared/                config (zod), db (pg Pool), errors, migrate, code generator (Sqids),
+  shared/                config (zod), db (pg Pool), errors + error handler, validation (zod → 400), migrate, code generator (Sqids),
                          url validator, alias normalizer, owner cookie, html escape/เทมเพลต, lru
   modules/
     links/               CRUD

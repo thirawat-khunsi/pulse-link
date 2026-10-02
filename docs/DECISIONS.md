@@ -79,3 +79,24 @@ integration test ทุกไฟล์ที่เพิ่มต่อจาก
 `pulse_link_test` ถูกสร้างโดย `db/init/01-test-db.sql` ซึ่ง Postgres รันเฉพาะตอน volume ยังว่าง
 ถ้ามี volume `pgdata` เก่าอยู่ก่อนแล้วให้ `docker compose down -v` หรือสร้างเองด้วย
 `docker compose exec postgres createdb -U pulse pulse_link_test`
+
+## D-017 รายละเอียด API ของ /api/links ที่ SPEC ไม่ได้ระบุ
+- ทุก endpoint (POST, GET list, GET/PATCH รายการเดียว) คืน object ลิงก์รูปเดียวกัน คือฟิลด์ตาม SPEC
+  + `clickCount`, `qrScanCount` และ `status` (`active|disabled|expired|exhausted`) ที่ server คำนวณ
+  เพื่อให้ป้ายสถานะในหน้าประวัติไม่ขึ้นกับนาฬิกาเครื่องผู้ใช้ ลำดับความสำคัญ: disabled > expired > exhausted
+- `id` เป็น number (BIGINT ที่ยังไม่เกิน `Number.MAX_SAFE_INTEGER`); `:id` ที่ไม่ใช่จำนวนเต็มบวกตอบ 404 เหมือนไม่พบ
+- `qrUrl` เป็น path แบบ relative (`/api/links/:id/qr`) เพราะเมื่อแยก service แล้ว `BASE_URL` อาจเป็นโดเมนของ redirect
+  ไม่ใช่โดเมนของ API; `shortUrl` = `BASE_URL/encodeURIComponent(code)`
+- `expiresAt` ต้องเป็น ISO 8601 ที่มีเขตเวลา และต้องเป็นอนาคตทั้งตอนสร้างและตอน PATCH; PATCH ส่ง `null` = ลบวันหมดอายุ/ลบเพดานคลิก
+- ตอนสร้าง ค่า `""`/`null` ของ `alias`, `expiresAt`, `maxClicks` ถือว่าไม่ได้ระบุ (รองรับฟอร์มที่ส่งช่องว่าง)
+- body ต้องไม่มีฟิลด์ที่ไม่รู้จัก; PATCH ที่มี `url`/`targetUrl` ตอบ 400 `TARGET_URL_IMMUTABLE`
+- cursor = base64url ของ `[created_at::text, id]` (เก็บ microsecond ไว้ครบ) แบ่งหน้าแบบ keyset บน `(created_at, id)`;
+  limit ค่าเริ่มต้น 20 สูงสุด 100
+- `/api` รับเฉพาะ `application/json` (ปิด parser `text/plain` ของ Fastify) เพื่อไม่ให้ฟอร์มข้ามเว็บส่ง "simple request" เข้ามาได้
+- rate limit ของ `POST /api/links` (30/นาที) นับแยกจากโควตารวม 300/นาที ของ route อื่นใต้ `/api`
+  (พฤติกรรมของ `@fastify/rate-limit` เมื่อ route ตั้งค่าเอง)
+
+## D-018 `clickCount` ไม่รวมการสแกน QR
+`links.click_count` นับทุกการเข้าชมที่ไม่ใช่บอท ทั้งคลิกและสแกน QR (ทั้งสองแบบใช้โควตา `max_clicks` ร่วมกัน)
+แต่ใน API `clickCount` = `click_count - qrScanCount` เพื่อให้ "คลิก" กับ "สแกน" เป็นตัวเลขที่ไม่ซ้อนกัน
+ตรงกับเกณฑ์ "นับสแกนแยกจากคลิก" และกราฟที่แยกเส้นคลิก/สแกนใน stats (P5 ใช้นิยามเดียวกัน); จำนวนเข้าชมรวม = ผลบวกของทั้งสอง
