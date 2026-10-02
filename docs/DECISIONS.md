@@ -135,3 +135,18 @@ integration test ทุกไฟล์ที่เพิ่มต่อจาก
 - ลำดับปิด: SIGTERM/SIGINT → `app.close()` (onClose: flush buffer) → `db.end()` → `exit(0)`; ถอด signal handler ทันทีที่เริ่มปิด
 - 410 ที่เกิดจาก atomic UPDATE ไม่ได้แถว จะอ่านสถานะล่าสุดอีกครั้งเพื่อเลือกข้อความ (ปิด/หมดอายุ/ครบจำนวน)
   ถ้ายังดูใช้งานได้ แปลว่ามีคนอื่นเอาโควตาสุดท้ายไประหว่างนั้น จึงตอบ "ครบจำนวนคลิก"
+
+## D-022 Docker image และการ deploy
+- image รันบน `node:24-alpine`: SPEC กำหนด Node 20+ แต่ Node 20 หมดอายุ (EOL) เมษายน 2026 จึงใช้ LTS ปัจจุบัน
+  เปลี่ยนได้ด้วย build arg `NODE_IMAGE`; `engines` ยังเป็น `>=20.19` สำหรับเครื่อง dev
+- migrate อัตโนมัติใน `CMD` ของ image (`migrate.js && exec node dist/main.js`) แทน service แยกใน compose
+  เพื่อให้ free host ที่รันแค่ image เดียวได้พฤติกรรมเดียวกับ `docker compose up`; advisory lock กันการ migrate ซ้อนกัน
+  `exec` ทำให้ node เป็น PID 1 และได้รับ SIGTERM โดยตรง (ทดสอบแล้วว่า `docker compose stop` flush คลิกที่ค้างใน buffer)
+- cookie `pl_owner` เป็น `Secure` เมื่อ `NODE_ENV=production` **และ** `BASE_URL` เป็น https (SPEC: "Secure เมื่อ production")
+  เพราะ compose รัน production ที่ `http://localhost` และเบราว์เซอร์บางตัว (เช่น Safari) ไม่เก็บ Secure cookie บน http
+  ซึ่งจะทำให้หน้าประวัติว่างทุกครั้ง; บน host จริง `BASE_URL` เป็น https จึงได้ Secure ตาม SPEC
+- `/health` ไม่ตรวจ DB (liveness เท่านั้น) และตั้ง `logLevel: 'warn'` เพราะ healthcheck เรียกทุก 15 วินาทีจะท่วม log
+- แนะนำ `TRUST_PROXY=loopback,uniquelocal` บน host ที่ proxy อยู่ในเครือข่ายภายใน แทน `true` ซึ่งทำให้ปลอม
+  `X-Forwarded-For` หลบ rate limit ได้ (ทดสอบแล้ว) — รายละเอียดใน DEPLOY.md §4
+- Neon ใช้ Direct connection (ไม่ใช่ `-pooler`) เพราะ migration ใช้ session advisory lock ซึ่งใช้กับ PgBouncer
+  แบบ transaction pooling ไม่ได้ และใช้ `sslmode=verify-full`
