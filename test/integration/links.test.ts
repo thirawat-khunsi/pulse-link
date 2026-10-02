@@ -122,9 +122,10 @@ describe.skipIf(!url)('/api/links (requires TEST_DATABASE_URL)', () => {
 
     it('rejects a duplicate alias with 409, including case and NFC variants, across owners', async () => {
       await create(ALICE, { url: 'https://example.com', alias: 'coffee' });
-      await create(ALICE, { url: 'https://example.com', alias: 'ก้า' });
+      // กุ่ม typed as ก + sara u + mai ek (NFC order) vs ก + mai ek + sara u.
+      await create(ALICE, { url: 'https://example.com', alias: '\u0E01\u0E38\u0E48\u0E21' });
 
-      for (const alias of ['coffee', 'COFFEE', 'ก้า'.normalize('NFD')]) {
+      for (const alias of ['coffee', 'COFFEE', '\u0E01\u0E48\u0E38\u0E21']) {
         const res = await api(BOB, 'POST', '', { url: 'https://example.com', alias });
         expect(res.statusCode).toBe(409);
         expect(res.json()).toEqual({
