@@ -6,6 +6,7 @@ import { ClickBuffer, type ClickSink } from './modules/clicks/buffer.js';
 import { createClickWriter } from './modules/clicks/repository.js';
 import { linksRoutes } from './modules/links/routes.js';
 import { qrRoutes } from './modules/qr/routes.js';
+import { statsRoutes } from './modules/stats/routes.js';
 import { LinkCache } from './modules/redirect/cache.js';
 import { redirectRoutes } from './modules/redirect/routes.js';
 import type { AppMode, TrustProxy } from './shared/config.js';
@@ -83,6 +84,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
           db: options.db,
           baseUrl: options.baseUrl,
         });
+        await api.register(statsRoutes, { prefix: '/links', db: options.db });
       },
       { prefix: '/api' },
     );
