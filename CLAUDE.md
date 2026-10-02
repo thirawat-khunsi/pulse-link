@@ -28,7 +28,8 @@ docs/                                           SPEC, ARCHITECTURE, DFD, ER, DEP
 
 ## Commands
 ```
-npm run dev        # dev server
+npm run dev        # dev server (API + redirect on :3000)
+npm run dev:web    # Vite dev server on :5173, proxies /api to :3000
 npm run build      # build server + web
 npm start          # run built app
 npm test           # vitest

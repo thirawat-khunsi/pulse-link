@@ -3,13 +3,14 @@
 # Node 20 reached end-of-life in April 2026; SPEC asks for Node 20+, so run on the current LTS (D-022).
 ARG NODE_IMAGE=node:24-alpine
 
-# ---- build: compile TypeScript with dev dependencies ----
+# ---- build: compile the server and the Vite web UI with dev dependencies ----
 FROM ${NODE_IMAGE} AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
+COPY web ./web
 RUN npm run build
 
 # ---- deps: production dependencies only ----
@@ -26,6 +27,8 @@ WORKDIR /app
 
 COPY --from=deps --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/dist ./dist
+# Served at / and /assets by src/shared/web.ts (resolved as ../../web/dist from dist/shared).
+COPY --from=build --chown=node:node /app/web/dist ./web/dist
 # The migration runner resolves db/migrations relative to dist/shared/migrate.js.
 COPY --chown=node:node db/migrations ./db/migrations
 COPY --chown=node:node package.json ./

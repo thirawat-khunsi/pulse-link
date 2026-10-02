@@ -182,3 +182,28 @@ integration test ทุกไฟล์ที่เพิ่มต่อจาก
 - สถิติเห็นเฉพาะคลิกที่ flush แล้ว (ช้ากว่าความจริงไม่เกิน `CLICK_FLUSH_MS` ≈ 1 วินาที) dashboard รีเฟรชทุก 5 วินาทีอยู่แล้ว
 - test ความสอดคล้อง: ยิงคลิกจริงผ่าน redirect (คน, preview ของ LINE, Googlebot, HEAD, สแกน) ทั้งลิงก์ปกติและลิงก์ที่มี
   `max_clicks` แล้วรายการ, รายละเอียด และ stats ต้องได้ตัวเลขเดียวกัน (4 คลิก / 2 สแกน / 2 บอท) ขณะที่ `links.click_count` = 6
+
+## D-025 Frontend (P6)
+- package เดียวกับ server (ไม่มี `web/package.json` แยก): React, Vite, `@fontsource` เป็น **devDependencies**
+  เพราะถูก bundle ตอน build แล้ว image ใช้ `npm ci --omit=dev` จึงไม่มีติดไปตอนรัน; `npm install` ครั้งเดียวได้ทั้งระบบ
+  dependency ที่เพิ่ม: `react`, `react-dom`, `vite`, `@vitejs/plugin-react` (stack ตาม SPEC §1), `@fontsource/ibm-plex-sans-thai`
+  (SPEC §6), `eslint-plugin-react-hooks` (lint กฎของ hooks) และ `@types/react*`; `npm audit` (2026-10-03): 0 vulnerabilities
+- กราฟวาดเองด้วย SVG (`web/src/chart.ts` + `components/charts.tsx`) ไม่ใช้ไลบรารีกราฟ: มีแค่เส้น 2 เส้นและแท่ง
+  จึงไม่คุ้มที่จะเพิ่ม dependency; SVG วาดตามความกว้างจริงของกล่อง (ResizeObserver) ตัวหนังสือจึงไม่เล็กบนมือถือ
+  และมีตารางซ่อน (visually hidden) ให้ screen reader อ่านตัวเลขรายวัน
+- ทดสอบ frontend เฉพาะ logic ที่ไม่ผูกกับ DOM (`web/src/*.test.ts`: เติม `https://`, router, เรขาคณิตของกราฟ, api client,
+  ป้ายภาษาไทย) ด้วย Vitest ตัวเดิมใน environment node — ไม่เพิ่ม jsdom/Testing Library; ส่วน UI ตรวจด้วยการเปิดจริง
+  ใน headless Chrome (สร้างลิงก์ alias ไทย, error จาก API, ประวัติ, dashboard 7/30 วัน, live refresh, QR, ยืนยันลบ, มือถือ 390px)
+- ฟอนต์โหลดเฉพาะน้ำหนัก 400/600/700; type ของ API เขียนซ้ำใน `web/src/api.ts` แทนการ import จาก `src/`
+  เพื่อไม่ให้ bundle ของเบราว์เซอร์ผูกกับโค้ด server
+- Dashboard รีเฟรชทุก 5 วินาทีเฉพาะตอนแท็บมองเห็น (Page Visibility) รอบถัดไปตั้งหลังรอบก่อนเสร็จ (ไม่ซ้อนกัน)
+  ถ้ารีเฟรชล้มจะคงข้อมูลเดิมไว้และขึ้นแถบแจ้ง จุด live เปลี่ยนเป็นสีเทา; เปลี่ยน 7/30 วันดึงใหม่ทันที
+- การ์ดตัวเลขคลิก/สแกนใช้ `totals` (ตลอดอายุ, D-024) จึงตรงกับหน้าประวัติ; "สัดส่วน" = คลิก : สแกน และแสดงจำนวนบอทที่กรองออก
+- วันหมดอายุใช้ `<input type="datetime-local">` ตีความตามเขตเวลาของเครื่องผู้ใช้ แล้วส่งเป็น ISO 8601 (UTC) ให้ API
+- prefix ของช่อง alias แสดง host ของหน้าเว็บ (เท่ากับ `BASE_URL` ในโหมด `all`); Short URL จริงมาจาก server เสมอ
+- `index.html` อ่านครั้งเดียวตอนเริ่มโปรเซส (build ใหม่ = โปรเซสใหม่) ตอบ `Cache-Control: no-cache`;
+  ไฟล์ใน `/assets` มี hash ในชื่อ จึงตอบ `max-age=1 ปี, immutable`; ถ้ายังไม่ได้ build ตอบหน้า 503 ภาษาไทย
+- CSP ของ helmet ตัด `upgrade-insecure-requests` เมื่อ `BASE_URL` เป็น http (docker compose ที่ `http://localhost`)
+  ไม่เช่นนั้นเบราว์เซอร์จะเปลี่ยน URL ของ asset เป็น https แล้วโหลดไม่ขึ้น; บน https ยังคงไว้
+- คัดลอกลิงก์ใช้ Clipboard API ถ้าใช้ไม่ได้ (http ที่ไม่ใช่ localhost) จะเปิด `prompt` ให้คัดลอกเอง
+- dev: `npm run dev` (API :3000) + `npm run dev:web` (Vite :5173 proxy `/api` ไป :3000)
