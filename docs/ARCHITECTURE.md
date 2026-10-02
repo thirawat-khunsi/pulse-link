@@ -20,7 +20,7 @@ flowchart LR
         QR["modules/qr<br/>/api/links/:id/qr"]
         Stats["modules/stats<br/>/api/links/:id/stats"]
         Redirect["modules/redirect<br/>GET /:code"]
-        Cache[("LRU cache<br/>5000 / TTL 60s")]
+        Cache[("LRU cache<br/>ลิงก์ 5000 / 60s<br/>ไม่พบ 1000 / 10s")]
         Buffer[("Click buffer")]
         Clicks["modules/clicks<br/>UA parse · bot · flush"]
         Health["/health"]
@@ -51,15 +51,15 @@ flowchart LR
 ```
 src/
   app.ts                 buildApp({ mode }) ลงทะเบียน plugin/route ตาม APP_MODE
-  server.ts, main.ts     เริ่ม server ตาม APP_MODE + graceful shutdown
+  server.ts, main.ts     เริ่ม server ตาม APP_MODE + ผูก SIGTERM/SIGINT กับ graceful shutdown
   entry/{all,api,redirect}.ts   จุดเริ่มที่บังคับโหมด
   scripts/migrate.ts     runner ของ db/migrations
   shared/                config (zod), db (pg Pool), errors + error handler, validation (zod → 400), migrate, code generator (Sqids),
-                         url validator, alias normalizer, owner cookie, html escape/เทมเพลต, lru
+                         url validator, alias normalizer, owner cookie, html escape/หน้า 404, lru, bot detection
   modules/
     links/               CRUD
-    redirect/            resolver (cache → DB, atomic max_clicks), หน้า 404/410
-    clicks/              ua-parser + ตรวจบอท, ClickBuffer + flush
+    redirect/            LinkCache (2 LRU), resolver (cache → DB, atomic max_clicks), หน้า 410
+    clicks/              ua-parser (device/browser/os), ClickBuffer + flush SQL
     qr/                  PNG/SVG
     stats/               query สถิติ (Asia/Bangkok)
 db/migrations/           SQL ธรรมดา + runner
@@ -116,7 +116,7 @@ sequenceDiagram
     alt cache miss
         R->>DB: SELECT link WHERE code = $1
         DB-->>R: link หรือไม่พบ
-        R->>C: set (TTL 60s หรือ negative 10s)
+        R->>C: set (ลิงก์: LRU 5000 / 60s, ไม่พบ: LRU แยก 1000 / 10s)
     end
     alt ไม่พบ
         R-->>V: 404 หน้า HTML ภาษาไทย
@@ -155,7 +155,13 @@ sequenceDiagram
 - **HEAD** ตอบเหมือน GET แต่ไม่บันทึกคลิก
 - **ลิงก์ถูกลบก่อน flush**: `JOIN links` ตัดแถวกำพร้าทิ้ง ไม่ให้ FK ทำให้ทั้ง batch ล้ม
 - **DB ล่มตอน flush**: คืนรายการเข้า buffer (มีเพดาน) แล้วลองใหม่รอบถัดไป
-- **Graceful shutdown** (SIGTERM/SIGINT): ปิดการรับ request → flush buffer จนหมด → ปิด pool
+- **Graceful shutdown** (SIGTERM/SIGINT): `app.close()` หยุดรับ request และรอ request ที่ค้างอยู่ →
+  hook `onClose` flush buffer จนหมด (ให้เวลาสูงสุด 5 วินาที ถ้า DB ไม่ตอบให้ log จำนวนที่เสียแล้วปิดต่อ) → `db.end()` → exit
+- **Negative cache แยก LRU**: code ที่ไม่พบเก็บใน LRU ของตัวเอง (1000 รายการ) การสุ่มเดา code จึงดันลิงก์จริงออกจาก cache ไม่ได้
+- **ลำดับ route**: find-my-way ให้ route แบบ static (`/health`, `/api/*`, `/assets/*`) ชนะ `/:code` เสมอไม่ว่าลงทะเบียนก่อนหลัง
+  และ `/:code` จับได้แค่ 1 segment; `/`, `/api`, `/favicon.ico` ที่ตกมาถึง `/:code` ตอบ 404 โดยไม่แตะ DB
+- **percent-encoding เสีย** (`/%E0%B8`): `frameworkErrors` ตอบหน้า 404 ภาษาไทยเดียวกับกรณีไม่พบ ไม่เผยข้อความของ Fastify
+- **Error นอก /api** เป็นหน้า HTML ภาษาไทย ส่วนใต้ `/api` เป็น JSON `{ error: { code, message } }`
 
 ## 4. Flow การสร้างลิงก์
 

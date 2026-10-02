@@ -6,6 +6,7 @@ import { ClickBuffer, type ClickWriter } from '../../src/modules/clicks/buffer.j
 import { createClickWriter } from '../../src/modules/clicks/repository.js';
 import { createPool, type Db } from '../../src/shared/db.js';
 import { runMigrations } from '../../src/shared/migrate.js';
+import { OWNER_COOKIE } from '../../src/shared/owner.js';
 import { buildTestApp } from '../helpers/app.js';
 import { getTestDatabaseUrl } from '../helpers/testDatabase.js';
 
@@ -268,6 +269,45 @@ describe.skipIf(!url)('GET /:code (requires TEST_DATABASE_URL)', () => {
       }
       expect(write).toHaveBeenCalled();
       expect(buffer.size).toBe(5); // kept for retry
+    });
+  });
+
+  describe('cache invalidation through the links API (same process)', () => {
+    const apiCall = (method: 'POST' | 'PATCH' | 'DELETE', path: string, payload?: object) =>
+      app.inject({
+        method,
+        url: `/api/links${path}`,
+        cookies: { [OWNER_COOKIE]: OWNER },
+        ...(payload ? { payload } : {}),
+      });
+
+    it('a new alias works immediately even after its miss was cached', async () => {
+      expect((await visit('/coffee')).statusCode).toBe(404); // cached as missing for 10 s
+      const created = await apiCall('POST', '', {
+        url: 'https://coffee.example/',
+        alias: 'coffee',
+      });
+      expect(created.statusCode).toBe(201);
+      expect((await visit('/coffee')).statusCode).toBe(302);
+    });
+
+    it('PATCH and DELETE take effect immediately for a cached plain link', async () => {
+      const id = await insertLink({ code: 'plain1' });
+      expect((await visit('/plain1')).statusCode).toBe(302); // now cached for 60 s
+
+      expect((await apiCall('PATCH', `/${id}`, { isActive: false })).statusCode).toBe(200);
+      expect((await visit('/plain1')).statusCode).toBe(410);
+
+      expect((await apiCall('PATCH', `/${id}`, { isActive: true })).statusCode).toBe(200);
+      expect((await visit('/plain1')).statusCode).toBe(302);
+
+      // Adding a limit moves the link to the atomic path at once.
+      expect((await apiCall('PATCH', `/${id}`, { maxClicks: 1 })).statusCode).toBe(200);
+      expect((await visit('/plain1')).statusCode).toBe(302);
+      expect((await visit('/plain1')).statusCode).toBe(410);
+
+      expect((await apiCall('DELETE', `/${id}`)).statusCode).toBe(204);
+      expect((await visit('/plain1')).statusCode).toBe(404);
     });
   });
 

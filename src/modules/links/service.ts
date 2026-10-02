@@ -30,6 +30,11 @@ export interface LinkDto {
 export interface LinkServiceOptions {
   /** Public origin without trailing slash, e.g. `https://pulse.example.com`. */
   baseUrl: string;
+  /**
+   * Called with a link's code after it is created, updated or deleted, so the redirect cache
+   * of this process drops it (including a cached miss for a new alias).
+   */
+  onLinkChanged?: (code: string) => void;
 }
 
 export const linkNotFound = () => new AppError(404, 'LINK_NOT_FOUND', 'ไม่พบลิงก์นี้');
@@ -96,6 +101,11 @@ export function createLinkService(repo: LinkRepository, options: LinkServiceOpti
     };
   }
 
+  function changed(row: LinkRow): LinkRow {
+    options.onLinkChanged?.(row.code);
+    return row;
+  }
+
   async function insertGenerated(
     base: Omit<Parameters<LinkRepository['insert']>[0], 'id' | 'code'>,
   ) {
@@ -129,14 +139,15 @@ export function createLinkService(repo: LinkRepository, options: LinkServiceOpti
         maxClicks: input.maxClicks ?? null,
       };
 
-      if (input.alias === undefined) return toDto(await insertGenerated(base));
+      if (input.alias === undefined) return toDto(changed(await insertGenerated(base)));
 
       const alias = validateAlias(input.alias);
       if (!alias.ok) {
         throw new AppError(400, 'INVALID_ALIAS', ALIAS_REJECTION_MESSAGES[alias.reason]);
       }
       try {
-        return toDto(await repo.insert({ ...base, code: alias.alias, isCustomAlias: true }));
+        const row = await repo.insert({ ...base, code: alias.alias, isCustomAlias: true });
+        return toDto(changed(row));
       } catch (err) {
         if (isCodeConflict(err)) {
           throw new AppError(409, 'ALIAS_TAKEN', 'ชื่อลิงก์นี้ถูกใช้แล้ว กรุณาเลือกชื่ออื่น');
@@ -171,12 +182,13 @@ export function createLinkService(repo: LinkRepository, options: LinkServiceOpti
       const patch: LinkPatch = input;
       const row = await repo.updateForOwner(id, ownerToken, patch);
       if (!row) throw linkNotFound();
-      return toDto(row);
+      return toDto(changed(row));
     },
 
     async remove(ownerToken: string, id: number): Promise<void> {
       const code = await repo.deleteForOwner(id, ownerToken);
       if (code === null) throw linkNotFound();
+      options.onLinkChanged?.(code);
     },
   };
 }

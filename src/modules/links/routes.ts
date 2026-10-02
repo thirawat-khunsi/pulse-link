@@ -9,6 +9,7 @@ import { createLinkService, linkNotFound } from './service.js';
 export interface LinksRoutesOptions {
   db: Db;
   baseUrl: string;
+  onLinkChanged?: (code: string) => void;
 }
 
 /** SPEC §7: link creation is limited separately from the rest of /api. */
@@ -16,7 +17,10 @@ export const CREATE_RATE_LIMIT = { max: 30, timeWindow: '1 minute' };
 
 /** `/api/links` CRUD. Expects `request.ownerToken` to be set by the enclosing scope. */
 export const linksRoutes: FastifyPluginCallback<LinksRoutesOptions> = (app, options, done) => {
-  const service = createLinkService(createLinkRepository(options.db), { baseUrl: options.baseUrl });
+  const service = createLinkService(createLinkRepository(options.db), {
+    baseUrl: options.baseUrl,
+    onLinkChanged: options.onLinkChanged,
+  });
 
   function idParam(params: unknown): number {
     const id = parseLinkId((params as { id: string }).id);

@@ -41,7 +41,7 @@ flowchart LR
 
     D1[("D1 links")]
     D2[("D2 clicks")]
-    D3[("D3 link cache<br/>(LRU ในหน่วยความจำ)")]
+    D3[("D3 link cache<br/>(LRU ลิงก์ + LRU ไม่พบ ในหน่วยความจำ)")]
     D4[("D4 click buffer<br/>(ในหน่วยความจำ)")]
 
     %% 1.0 Manage links
@@ -55,7 +55,7 @@ flowchart LR
     %% 2.0 Redirect
     Visitor -- "GET /:code, s=qr, UA, Referer" --> P2
     D3 -- "link ที่ cache ไว้" --> P2
-    P2 -- "เติม cache (TTL 60s, negative 10s)" --> D3
+    P2 -- "เติม cache (ลิงก์ 60s, ไม่พบ 10s)" --> D3
     D1 -- "link ตาม code" --> P2
     P2 -- "atomic UPDATE click_count (เฉพาะลิงก์มี max_clicks)" --> D1
     P2 -- "302 / 404 / 410" --> Visitor
@@ -95,5 +95,5 @@ flowchart LR
 |---|---|---|---|
 | D1 | links | PostgreSQL | ดู [ER.md](ER.md) |
 | D2 | clicks | PostgreSQL | ดู [ER.md](ER.md) |
-| D3 | link cache | หน่วยความจำต่อโปรเซส | สูงสุด 5000 รายการ, TTL 60s, negative cache 10s; ไม่ใช้ตัดสินลิงก์ที่มี `max_clicks` |
+| D3 | link cache | หน่วยความจำต่อโปรเซส | ลิงก์: LRU 5000 รายการ TTL 60s; ไม่พบ: LRU แยก 1000 รายการ TTL 10s; ไม่ใช้ตัดสินลิงก์ที่มี `max_clicks` |
 | D4 | click buffer | หน่วยความจำต่อโปรเซส | อาจเสียคลิกได้ไม่เกินช่วง flush หากโปรเซส crash |

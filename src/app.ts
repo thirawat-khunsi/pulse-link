@@ -52,6 +52,10 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
 
   app.get('/health', () => ({ ok: true, mode: options.mode }));
 
+  // One cache per process, shared by the redirect (reads) and the links API (invalidates).
+  // In APP_MODE=api there is no redirect here, so invalidation is a no-op (D-004).
+  const cache = options.cache ?? new LinkCache();
+
   if (servesApi(options.mode)) {
     void app.register(
       async (api) => {
@@ -68,6 +72,9 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
           prefix: '/links',
           db: options.db,
           baseUrl: options.baseUrl,
+          onLinkChanged: (code) => {
+            cache.invalidate(code);
+          },
         });
       },
       { prefix: '/api' },
@@ -75,7 +82,6 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
   }
 
   if (servesRedirect(options.mode)) {
-    const cache = options.cache ?? new LinkCache();
     const clicks =
       options.clicks ??
       new ClickBuffer({

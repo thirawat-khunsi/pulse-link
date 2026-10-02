@@ -15,9 +15,12 @@ SPEC: "บอทไม่นับและไม่ถูกจำกัด" �
 ช่วงตัวอักษรไทยที่อนุญาตคือ U+0E00–U+0E7F; ไม่อนุญาตอักขระที่มองไม่เห็น เช่น zero-width space
 
 ## D-004 Cache ข้ามโปรเซสเมื่อแยก service
-LRU cache อยู่ในหน่วยความจำของแต่ละโปรเซส PATCH/DELETE จะ invalidate ได้เฉพาะโปรเซสที่รับคำขอ
-ในโหมดแยก `api` / `redirect` ค่าเก่าจึงค้างได้ไม่เกิน TTL 60 วินาที (ยอมรับเพราะห้ามใช้ Redis)
-ลิงก์ที่มี `max_clicks` ไม่ได้รับผลเพราะตัดสินที่ DB ทุกครั้ง; เงื่อนไข atomic UPDATE รวม `expires_at` ด้วย
+LRU cache อยู่ในหน่วยความจำของแต่ละโปรเซส POST/PATCH/DELETE จะ invalidate ได้เฉพาะโปรเซสที่รับคำขอ
+(POST ล้าง "ไม่พบ" ที่ cache ไว้ของ alias ใหม่ด้วย) ในโหมดแยก `api` / `redirect` จึงค้างได้ดังนี้ (ยอมรับเพราะห้ามใช้ Redis):
+- ลิงก์ที่ถูกปิด/ลบ/แก้วันหมดอายุ ยัง redirect ตามค่าเก่าได้ไม่เกิน 60 วินาที
+- alias ที่เพิ่งสร้าง อาจยังตอบ 404 ได้ไม่เกิน 10 วินาที ถ้ามีคนเปิดก่อนสร้าง
+- ลิงก์ที่มี `max_clicks` ไม่ได้รับผล เพราะตัดสินที่ DB ทุกครั้ง (atomic UPDATE รวม `is_active` และ `expires_at`)
+- วันหมดอายุตรวจกับเวลาปัจจุบันทุก request แม้ลิงก์จะอยู่ใน cache (cache เก็บค่า `expires_at` ไม่ได้เก็บผลการตัดสิน)
 
 ## D-005 ua-parser-js เวอร์ชัน 1.x
 v2 ใช้สัญญาอนุญาต AGPL-3.0 จึงใช้ v1.x (MIT) และตรวจบอทด้วย regex ของเราเอง
@@ -103,3 +106,32 @@ integration test ทุกไฟล์ที่เพิ่มต่อจาก
 - `links.click_count` ไม่ถูกใช้แสดงผล มีไว้บังคับ `max_clicks` เท่านั้น (นับทุกการเข้าชมที่ไม่ใช่บอททั้งคลิกและสแกน
   เพราะใช้โควตาร่วมกัน) จึงอาจต่างจากผลนับใน `clicks` ชั่วคราวระหว่างรอ flush หรือเมื่อ flush ทิ้งรายการ (D-008)
 - test: คลิก 2 + สแกน 1 + บอท 1 (ทั้งกรณีบอทเป็น click และ qr) ต้องได้ 2 / 1 แม้ `click_count` จะเป็นค่าอื่น
+
+## D-019 ใครนับเป็นบอท (ผู้ใช้ยืนยันแล้ว)
+- **บอท** (`is_bot=true`, `device=bot`, ไม่นับใน `clickCount`/`qrScanCount` และไม่กินโควตา `max_clicks`):
+  ตัว preview ลิงก์ของแอปแชต/โซเชียล (LINE `line-poker`, Facebook `facebookexternalhit`, Slack, WhatsApp, Telegram, Discord,
+  Twitter/X, LinkedIn, Skype), crawler ของ search engine (Googlebot, Bingbot, Baidu, Yandex, DuckDuckGo, Apple, Petal
+  และคำทั่วไป `crawler`, `spider`, `...bot`), HeadlessChrome และ request ที่ไม่มี User-Agent
+- **คน**: เบราว์เซอร์ทั่วไป รวม in-app browser ของ LINE (`Line/13.x`) และ curl / wget / HTTP library
+  (python-requests, Go-http-client ฯลฯ) เพื่อให้การสาธิตด้วย curl ขึ้นในสถิติ
+- ข้อยกเว้น: มือถือยี่ห้อ CUBOT ไม่ถือเป็นบอทแม้ลงท้ายด้วย "bot"
+- regex อยู่ที่ `src/shared/bot.ts` (ไม่ใช่ `modules/clicks`) เพราะ redirect ต้องรู้ตอน request ว่าจะกินโควตาหรือไม่
+  ส่วนการแยก device/browser/os ด้วย ua-parser-js ทำตอน flush ไม่ใช่ใน hot path; LINE in-app ที่ ua-parser-js 1.x
+  รายงานเป็น "WebKit" แสดงเป็น "LINE"
+
+## D-020 alias ไทยใน `/:code` และ percent-encoding
+- เบราว์เซอร์และแอปสแกน QR ส่ง path ภาษาไทยแบบ percent-encoded เสมอ Fastify ถอดรหัสแล้ว normalize NFC + lowercase
+  จึงรองรับทั้ง `/กาแฟ` ที่พิมพ์ในแถบที่อยู่ และ `/%E0%B8%81...` รวมถึงลำดับสระ/วรรณยุกต์ที่ต่างกัน
+- ไบต์ UTF-8 ดิบใน request line (ไม่ encode) ถูก HTTP parser ของ Node ปฏิเสธเป็น 400 ก่อนถึงแอป แม้เปิด
+  `insecureHTTPParser` ก็ตาม (ตรวจแล้ว) แก้ในแอปไม่ได้และไม่ควรแก้ (RFC 3986 กำหนดให้ encode)
+  ถ้าสาธิตด้วย command line ให้ใช้ URL ที่ encode แล้ว (ดู DEMO.md)
+- percent-encoding เสีย (`/%E0%B8`, `/%zz`) ตอบหน้า 404 ภาษาไทยเดียวกับกรณีไม่พบ (ผู้ใช้ยืนยันแล้ว) ใต้ `/api` เป็น JSON 404
+
+## D-021 Cache และ shutdown ของ redirect
+- Negative cache เป็น LRU แยก 1000 รายการ / 10 วินาที (ผู้ใช้กำหนด) เพื่อไม่ให้การสุ่มเดา code ดันลิงก์จริงออกจาก LRU 5000 รายการ
+- `/`, คำสงวน (`api`, `favicon.ico` ฯลฯ) และ code ยาวเกิน 64 ตัว ตอบ 404 ทันทีโดยไม่ query และไม่เก็บลง cache
+- `ClickBuffer.close()` รอ DB ได้สูงสุด 5 วินาที (`closeTimeoutMs`) แล้ว log จำนวนคลิกที่เสียและปิดต่อ
+  เพื่อไม่ให้ DB ที่ค้างทำให้โปรเซสปิดไม่ได้ (pg ไม่มี query timeout เป็นค่าเริ่มต้น)
+- ลำดับปิด: SIGTERM/SIGINT → `app.close()` (onClose: flush buffer) → `db.end()` → `exit(0)`; ถอด signal handler ทันทีที่เริ่มปิด
+- 410 ที่เกิดจาก atomic UPDATE ไม่ได้แถว จะอ่านสถานะล่าสุดอีกครั้งเพื่อเลือกข้อความ (ปิด/หมดอายุ/ครบจำนวน)
+  ถ้ายังดูใช้งานได้ แปลว่ามีคนอื่นเอาโควตาสุดท้ายไประหว่างนั้น จึงตอบ "ครบจำนวนคลิก"
