@@ -5,7 +5,9 @@
 export function assertSafeTestDatabaseUrl(testUrl: string, mainUrl: string | undefined): void {
   const test = parseTarget(testUrl);
   if (!test) {
-    throw new Error('TEST_DATABASE_URL is not a valid postgres URL; refusing to run integration tests');
+    throw new Error(
+      'TEST_DATABASE_URL is not a valid postgres URL; refusing to run integration tests',
+    );
   }
   if (!test.database.endsWith('_test')) {
     throw new Error(
