@@ -2,10 +2,14 @@ import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
+import { ClickBuffer, type ClickSink } from './modules/clicks/buffer.js';
+import { createClickWriter } from './modules/clicks/repository.js';
 import { linksRoutes } from './modules/links/routes.js';
+import { LinkCache } from './modules/redirect/cache.js';
+import { redirectRoutes } from './modules/redirect/routes.js';
 import type { AppMode, TrustProxy } from './shared/config.js';
 import type { Db } from './shared/db.js';
-import { AppError, registerErrorHandling } from './shared/errors.js';
+import { AppError, handleFrameworkError, registerErrorHandling } from './shared/errors.js';
 import { registerOwnerCookie } from './shared/owner.js';
 
 export interface BuildAppOptions {
@@ -17,6 +21,11 @@ export interface BuildAppOptions {
   secureCookies?: boolean;
   trustProxy?: TrustProxy;
   logger?: FastifyServerOptions['logger'];
+  /** CLICK_FLUSH_MS (default 1000). */
+  clickFlushMs?: number;
+  /** Test seams: replace the click buffer or the link cache. */
+  clicks?: ClickSink & { close(): Promise<void> };
+  cache?: LinkCache;
 }
 
 /** SPEC §7: every /api route shares this per-IP budget unless it sets its own. */
@@ -35,6 +44,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     trustProxy: options.trustProxy ?? false,
     // Thai aliases are ~9 chars per letter when percent-encoded (DECISIONS D-007).
     routerOptions: { maxParamLength: 512 },
+    frameworkErrors: handleFrameworkError,
   });
 
   registerErrorHandling(app);
@@ -62,6 +72,22 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
       },
       { prefix: '/api' },
     );
+  }
+
+  if (servesRedirect(options.mode)) {
+    const cache = options.cache ?? new LinkCache();
+    const clicks =
+      options.clicks ??
+      new ClickBuffer({
+        writer: createClickWriter(options.db),
+        flushIntervalMs: options.clickFlushMs ?? 1000,
+        logger: app.log,
+      });
+    // Runs before the caller's own onClose hooks (e.g. closing the pool), so the last clicks land.
+    app.addHook('onClose', async () => {
+      await clicks.close();
+    });
+    void app.register(redirectRoutes, { db: options.db, cache, clicks });
   }
 
   return app;

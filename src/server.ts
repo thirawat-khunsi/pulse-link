@@ -17,6 +17,7 @@ export async function startServer(modeOverride?: AppMode): Promise<void> {
     db,
     baseUrl: config.BASE_URL,
     secureCookies: config.NODE_ENV === 'production',
+    clickFlushMs: config.CLICK_FLUSH_MS,
     trustProxy: config.TRUST_PROXY,
     logger: { level: config.NODE_ENV === 'production' ? 'info' : 'debug' },
   });

@@ -1,3 +1,5 @@
+import type { FastifyReply } from 'fastify';
+
 const HTML_ESCAPES: Record<string, string> = {
   '&': '&amp;',
   '<': '&lt;',
@@ -50,4 +52,20 @@ export function renderStatusPage(page: StatusPage): string {
 </body>
 </html>
 `;
+}
+
+/** Shared by the redirect (unknown code) and the not-found/bad-URL handlers outside /api. */
+export const NOT_FOUND_PAGE = renderStatusPage({
+  status: 404,
+  title: 'ไม่พบลิงก์นี้',
+  message: 'ลิงก์อาจพิมพ์ผิด หรือถูกลบไปแล้ว กรุณาตรวจสอบกับผู้ที่ส่งลิงก์ให้คุณ',
+});
+
+/** Send a status page; never cached so a re-enabled link works immediately. */
+export function sendHtml(reply: FastifyReply, status: number, html: string): FastifyReply {
+  return reply
+    .status(status)
+    .header('cache-control', 'no-store')
+    .type('text/html; charset=utf-8')
+    .send(html);
 }

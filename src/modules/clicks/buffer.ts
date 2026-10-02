@@ -42,6 +42,8 @@ export interface ClickBufferOptions {
   batchSize?: number;
   /** Upper bound kept while the database is unreachable; oldest events are dropped beyond it (D-008). */
   maxPending?: number;
+  /** How long close() may wait for the database before giving up (default 5000). */
+  closeTimeoutMs?: number;
   logger?: Pick<FastifyBaseLogger, 'error' | 'warn'>;
 }
 
@@ -55,6 +57,7 @@ const MAX_HEADER_LENGTH = 1024;
 export class ClickBuffer implements ClickSink {
   private pending: ClickEvent[] = [];
   private inFlight: Promise<void> | null = null;
+  private inFlightSize = 0;
   private earlyFlushScheduled = false;
   private readonly timer: NodeJS.Timeout;
   private readonly batchSize: number;
@@ -97,26 +100,43 @@ export class ClickBuffer implements ClickSink {
     return this.inFlight;
   }
 
-  /** Stop the timer and flush until empty (graceful shutdown). Gives up if a flush fails. */
+  /**
+   * Stop the timer and flush until empty (graceful shutdown). Gives up, logging what is lost,
+   * when a flush fails or the database does not answer within closeTimeoutMs, so a hung
+   * database can never block process exit.
+   */
   async close(): Promise<void> {
     clearInterval(this.timer);
+    let timeout: NodeJS.Timeout | undefined;
+    const timedOut = new Promise<'timeout'>((resolve) => {
+      timeout = setTimeout(() => {
+        resolve('timeout');
+      }, this.options.closeTimeoutMs ?? 5000);
+    });
+    try {
+      const outcome = await Promise.race([this.drain(), timedOut]);
+      const lost = this.pending.length + (outcome === 'timeout' ? this.inFlightSize : 0);
+      if (lost > 0)
+        this.options.logger?.error({ lost, outcome }, 'click buffer not flushed on close');
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  private async drain(): Promise<'drained' | 'failed'> {
     if (this.inFlight) await this.inFlight;
     while (this.pending.length > 0) {
       const before = this.pending.length;
       await this.flush();
-      if (this.pending.length >= before) {
-        this.options.logger?.error(
-          { lost: this.pending.length },
-          'click buffer not flushed on close',
-        );
-        return;
-      }
+      if (this.pending.length >= before) return 'failed';
     }
+    return 'drained';
   }
 
   private async writeBatch(): Promise<void> {
     const batch = this.pending;
     this.pending = [];
+    this.inFlightSize = batch.length;
     try {
       await this.options.writer.write(batch.map(toRow));
     } catch (err) {
@@ -128,6 +148,8 @@ export class ClickBuffer implements ClickSink {
         this.options.logger?.warn({ dropped }, 'click buffer full; dropping oldest events');
       }
       this.pending = merged.slice(dropped);
+    } finally {
+      this.inFlightSize = 0;
     }
   }
 }

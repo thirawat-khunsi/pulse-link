@@ -170,7 +170,29 @@ describe('ClickBuffer', () => {
     w.set('fail');
     buffer.enqueue(event(1));
     await buffer.close();
-    expect(logger.error).toHaveBeenCalledWith({ lost: 1 }, expect.any(String));
+    expect(logger.error).toHaveBeenCalledWith({ lost: 1, outcome: 'failed' }, expect.any(String));
+  });
+
+  it('close() stops waiting for a hung database after closeTimeoutMs', async () => {
+    const w = fakeWriter();
+    const logger = { error: vi.fn(), warn: vi.fn() };
+    buffer = new ClickBuffer({
+      writer: w.writer,
+      flushIntervalMs: 60_000,
+      closeTimeoutMs: 50,
+      logger,
+    });
+    w.set('hang');
+    buffer.enqueue(event(1));
+    buffer.enqueue(event(2));
+    void buffer.flush();
+    buffer.enqueue(event(3));
+
+    const startedAt = performance.now();
+    await buffer.close();
+    expect(performance.now() - startedAt).toBeLessThan(1000);
+    expect(logger.error).toHaveBeenCalledWith({ lost: 3, outcome: 'timeout' }, expect.any(String));
+    buffer = undefined; // already closed; the hung write is abandoned
   });
 
   it('bounds oversized headers kept in memory', async () => {
