@@ -51,10 +51,13 @@ flowchart LR
 ```
 src/
   app.ts                 buildApp({ mode }) ลงทะเบียน plugin/route ตาม APP_MODE
-  entry/{all,api,redirect}.ts   จุดเริ่มต่อโหมด + graceful shutdown
-  shared/                config (zod), db (pg Pool), errors, owner cookie, html escape/เทมเพลต, lru
+  server.ts, main.ts     เริ่ม server ตาม APP_MODE + graceful shutdown
+  entry/{all,api,redirect}.ts   จุดเริ่มที่บังคับโหมด
+  scripts/migrate.ts     runner ของ db/migrations
+  shared/                config (zod), db (pg Pool), errors, migrate, code generator (Sqids),
+                         url validator, alias normalizer, owner cookie, html escape/เทมเพลต, lru
   modules/
-    links/               url-validator, alias normalizer, code generator (Sqids), CRUD
+    links/               CRUD
     redirect/            resolver (cache → DB, atomic max_clicks), หน้า 404/410
     clicks/              ua-parser + ตรวจบอท, ClickBuffer + flush
     qr/                  PNG/SVG

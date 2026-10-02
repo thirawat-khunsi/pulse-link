@@ -39,3 +39,33 @@ Vite build เสิร์ฟผ่าน `@fastify/static` ที่ prefix `/a
 
 ## D-009 ภาษาของเอกสาร
 เอกสารใน `docs/` เขียนภาษาไทยเพื่อผู้ตรวจ ใช้ศัพท์เทคนิคภาษาอังกฤษ; โค้ดและคอมเมนต์เป็นภาษาอังกฤษ
+
+## D-010 ตำแหน่งของตัวสร้าง code / ตัวตรวจ URL / alias
+อยู่ใน `src/shared/` (`code.ts`, `url.ts`, `alias.ts`) แทน `modules/links` เพราะ `redirect` ต้องใช้ `normalizeCode`
+ตัวเดียวกับตอนบันทึก alias และโมดูลต้องไม่ import ภายในของกันและกัน
+
+## D-011 ขอบเขตของ "private IP literal" และ "โดเมนของระบบเอง"
+- ปฏิเสธ `localhost`, `*.localhost` และ IP literal ในช่วงที่ไม่ใช่สาธารณะ: IPv4 `0/8, 10/8, 100.64/10, 127/8, 169.254/16,
+  172.16/12, 192.0.0/24, 192.168/16, 198.18/15, 224/4, 240/4`; IPv6 `::, ::1, fc00::/7, fe80::/10, ff00::/8`
+  และ IPv4-mapped (`::ffff:a.b.c.d`) ตรวจตามช่วง IPv4 — รวม link-local เพื่อกัน `169.254.169.254` (cloud metadata)
+- ตรวจเฉพาะ IP literal ไม่ resolve DNS (ตาม SPEC; การ resolve ทำให้ช้าและยังโดน DNS rebinding ได้อยู่ดี)
+- รูปแบบ IPv4 แปลกๆ (`0x7f.1`, `2130706433`, `017700000001`) `new URL` normalize เป็น `127.0.0.1` ก่อนตรวจ
+- "โดเมนของระบบเอง" = hostname ตรงกับ hostname ของ `BASE_URL` (ไม่สนพอร์ต, ไม่สนตัวพิมพ์, ตัดจุดท้าย) ไม่รวม subdomain
+- เก็บ `target_url` เป็น `url.href` ที่ normalize แล้ว (host เป็น punycode, path ถูก percent-encode)
+
+## D-012 code ที่สร้างอัตโนมัติชนคำสงวน
+code จาก Sqids ยาว ≥ 6 ตัว `0-9a-z` จึงมีโอกาส (น้อยมาก) ตรงกับ `health`, `assets`, `static` ได้
+ตอนสร้างลิงก์ให้ตรวจ `isReservedCode` แล้วจองเลขใหม่ เหมือนกรณีชนกับ alias
+
+## D-013 Node 20 และเวอร์ชันเครื่องมือ
+SPEC กำหนด Node 20+ จึงใช้ Vitest 4 (Vitest 5 ต้องการ Node 22+) และ TypeScript 6.0 (typescript-eslint รองรับ < 6.1)
+`engines.node` เป็น `>=20.19` ตามที่ ESLint 10 ต้องการ; dev ใช้ `tsx` รันไฟล์ TypeScript โดยไม่ต้อง build
+(`npm run dev`, `npm run migrate`) — เป็น devDependency ที่เพิ่มนอก SPEC; `.env` โหลดด้วย `process.loadEnvFile` ของ Node (ไม่ใช้ dotenv)
+
+## D-014 TRUST_PROXY
+รับ `false` (ค่าเริ่มต้น), `true` หรือรายการ IP/CIDR ของ proxy คั่นด้วยจุลภาค
+ไม่รับจำนวน hop เพราะ Fastify 5 ถือว่า hop count เป็น "ไม่เชื่อใคร" (ตรวจ peer ไม่ได้) ใส่ตัวเลขจะ error ตอนเริ่ม
+
+## D-015 Entrypoint
+`src/main.ts` (ใช้กับ `npm start`/`npm run dev`) อ่าน `APP_MODE`; `src/entry/{all,api,redirect}.ts` บังคับโหมดตามชื่อไฟล์
+สำหรับรันแต่ละ service แยกกัน (`node dist/entry/redirect.js`)
